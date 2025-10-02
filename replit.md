@@ -35,16 +35,33 @@ This is an MCR (Macro) File Humanizer application that allows users to upload, p
 
 ## Key Features
 
-1. **File Upload**: Upload MCR files with configurable humanization settings
-2. **File Management**: View, download, and delete uploaded files
-3. **Processing Queue**: Background processing with progress tracking
-4. **Keyboard Editor**: Visual editor for MCR keyboard commands
-5. **File Operations**:
+1. **🖼️ Mandatory Image-Based Workflow** (October 2025):
+   - ALL MCR files must pass through image analysis first
+   - Interactive canvas for drawing execution paths on images
+   - Automatic validation: image → drawn path → MCR upload
+   
+2. **⌨️ Keyboard-Only Processing**:
+   - Automatic removal of ALL mouse commands from uploaded MCR files
+   - System only recognizes and processes keyboard commands
+   - Mouse movements completely eliminated from workflow
+
+3. **⏱️ Minimal Delays System**:
+   - User-configurable minimal delays (default: 10-100ms)
+   - Time extension factor (1.0x = normal, 2.0x = double time)
+   - Seeded random generator ensures non-repetitive execution
+   - Each run is unique while staying within configured bounds
+
+4. **File Management**: View, download, and delete uploaded files
+
+5. **Processing Queue**: Background processing with progress tracking
+
+6. **File Operations**:
    - Calculate and display MCR file duration
    - Lengthen files to target duration
-   - Clean up mouse commands and zero delays
+   - Clean up zero delays
    - Merge and optimize two files
-6. **Real-time Updates**: WebSocket connection for live status updates
+
+7. **Real-time Updates**: WebSocket connection for live status updates
 
 ## Database Schema
 
@@ -191,6 +208,13 @@ The application is configured for Replit Autoscale deployment:
 - **NEW**: Caché Redis para optimización de rendimiento
 - **NEW**: 5 servicios nuevos: cache, queue, pattern, image analysis, profile
 - **NEW**: 20+ nuevos endpoints API para funcionalidades avanzadas
+- **Oct 2, 2025**: Mandatory image-based workflow - all MCR files must be associated with an image and drawn path
+- **Oct 2, 2025**: Automatic mouse command removal - ALL mouse commands are filtered from uploaded MCR files
+- **Oct 2, 2025**: Minimal delays humanization system with timeExtensionFactor, minDelay, maxDelay, and seeded randomization
+- **Oct 2, 2025**: New ImagePathDrawer component with interactive canvas for drawing execution paths on images
+- **Oct 2, 2025**: Complete FileUpload UI rewrite with 3-step workflow (Image → Path → MCR)
+- **Oct 2, 2025**: Database schema updates: drawnPath/pathMetadata in images table, requiredImageId in mcrFiles table
+- **Oct 2, 2025**: Backend validation ensures every MCR upload has an associated image with drawn path
 
 ## User Preferences
 
