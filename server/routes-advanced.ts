@@ -270,6 +270,38 @@ export function registerAdvancedRoutes(app: Express) {
     }
   });
 
+  // Save drawn path on image
+  app.post("/api/images/:id/path", async (req, res) => {
+    try {
+      const { path: drawnPath, metadata } = req.body;
+      
+      if (!drawnPath || !Array.isArray(drawnPath) || drawnPath.length < 5) {
+        return res.status(400).json({ 
+          message: "Path must be an array with at least 5 points" 
+        });
+      }
+
+      const image = await storage.getImage(req.params.id);
+      if (!image) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+
+      await storage.updateImage(req.params.id, {
+        drawnPath: JSON.stringify(drawnPath),
+        pathMetadata: JSON.stringify(metadata)
+      });
+
+      res.json({ 
+        message: "Path saved successfully",
+        imageId: req.params.id 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to save path" 
+      });
+    }
+  });
+
   // Analyze uploaded image (OCR + UI detection)
   app.post("/api/images/:id/analyze", async (req, res) => {
     try {

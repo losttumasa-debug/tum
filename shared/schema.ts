@@ -108,6 +108,7 @@ export const insertMcrFileSchema = createInsertSchema(mcrFiles).pick({
   size: true,
   humanizationSettings: true,
   sourceFileIds: true,
+  requiredImageId: true,
 });
 
 export const insertImageSchema = createInsertSchema(images).pick({

@@ -1,71 +1,124 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormDescription } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import ImagePathDrawer from "./ImagePathDrawer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { Upload, FileText, Settings } from "lucide-react";
+import { Upload, FileText, Settings, Image as ImageIcon, CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
 import { formatFileSize } from "@/lib/fileUtils";
 
 const humanizationSchema = z.object({
-  delayVariation: z.number().min(1).max(100).default(25),
-  typingErrors: z.number().min(0).max(10).default(2),
-  hesitationPauses: z.number().min(0).max(50).default(15),
+  delayVariation: z.number().min(1).max(100).default(10),
+  typingErrors: z.number().min(0).max(10).default(1),
+  hesitationPauses: z.number().min(0).max(50).default(5),
   preserveStructure: z.boolean().default(true),
-  removeMouseOnUpload: z.boolean().default(false),
+  timeExtensionFactor: z.number().min(1).max(5).default(1),
+  minDelay: z.number().min(0).max(100).default(10),
+  maxDelay: z.number().min(10).max(1000).default(100),
 });
 
 type HumanizationSettings = z.infer<typeof humanizationSchema>;
 
+interface ImageFile {
+  id: string;
+  originalName: string;
+  filename: string;
+  drawnPath?: string | null;
+}
+
 export default function FileUpload() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [fileNames, setFileNames] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [showPathDrawer, setShowPathDrawer] = useState(false);
+  const [pathCompleted, setPathCompleted] = useState(false);
+  const [drawnPath, setDrawnPath] = useState<any>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch available images
+  const { data: images = [] } = useQuery<ImageFile[]>({
+    queryKey: ['/api/images'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/images');
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
+
   const form = useForm<HumanizationSettings>({
     resolver: zodResolver(humanizationSchema),
     defaultValues: {
-      delayVariation: 25,
-      typingErrors: 2,
-      hesitationPauses: 15,
+      delayVariation: 10,
+      typingErrors: 1,
+      hesitationPauses: 5,
       preserveStructure: true,
-      excludedKeys: [],
+      timeExtensionFactor: 1,
+      minDelay: 10,
+      maxDelay: 100,
+    },
+  });
+
+  const savePathMutation = useMutation({
+    mutationFn: async (data: { imageId: string; path: any; metadata: any }) => {
+      const response = await apiRequest('POST', `/api/images/${data.imageId}/path`, {
+        path: data.path,
+        metadata: data.metadata
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/images'] });
+      toast({
+        title: "Path saved",
+        description: "Your drawn path has been saved successfully.",
+      });
+      setPathCompleted(true);
+      setShowPathDrawer(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to save path",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (data: { file: File; settings: HumanizationSettings }) => {
+    mutationFn: async (data: { file: File; settings: HumanizationSettings; imageId: string }) => {
       const formData = new FormData();
       formData.append('file', data.file);
       formData.append('humanizationSettings', JSON.stringify(data.settings));
+      formData.append('requiredImageId', data.imageId);
 
       const response = await apiRequest('POST', '/api/files/upload', formData);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/files'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
-        title: "File uploaded successfully",
-        description: "Your MCR file has been uploaded and queued for processing.",
+        title: "MCR file uploaded successfully",
+        description: "Your file is now being processed with humanization.",
       });
-      setIsUploading(false);
-      setUploadProgress(0);
+      resetUploadState();
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Upload failed",
         description: error.message,
@@ -76,345 +129,370 @@ export default function FileUpload() {
     },
   });
 
+  const resetUploadState = () => {
+    setSelectedFile(null);
+    setSelectedImageId(null);
+    setShowPathDrawer(false);
+    setPathCompleted(false);
+    setDrawnPath(null);
+    setIsUploading(false);
+    setUploadProgress(0);
+  };
+
+  const handleImageSelect = (imageId: string) => {
+    setSelectedImageId(imageId);
+    const image = images.find(img => img.id === imageId);
+    if (image?.drawnPath) {
+      setPathCompleted(true);
+    } else {
+      setPathCompleted(false);
+    }
+  };
+
+  const handleDrawPath = () => {
+    if (!selectedImageId) return;
+    setShowPathDrawer(true);
+  };
+
+  const handlePathComplete = (path: any, metadata: any) => {
+    if (!selectedImageId) return;
+    setDrawnPath({ path, metadata });
+    savePathMutation.mutate({
+      imageId: selectedImageId,
+      path,
+      metadata
+    });
+  };
+
   const handleUpload = async () => {
-    if (selectedFiles.length === 0) {
+    if (!selectedFile || !selectedImageId) {
       toast({
-        title: "No files selected",
-        description: "Please select files to upload.",
+        title: "Missing requirements",
+        description: "Please select an image with path and an MCR file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!pathCompleted) {
+      toast({
+        title: "Path not completed",
+        description: "Please draw a path on the image first.",
         variant: "destructive",
       });
       return;
     }
 
     setIsUploading(true);
-    const settings = { ...form.getValues() };
+    const settings = form.getValues();
+    
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return prev;
+        }
+        return prev + 10;
+      });
+    }, 200);
 
-    for (const file of selectedFiles) {
-      // Simulate progress for better UX for each file
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 200);
-      await uploadMutation.mutateAsync({ file, settings });
-      clearInterval(progressInterval); // Clear interval after each file upload
-      setUploadProgress(0); // Reset progress for next file
+    try {
+      await uploadMutation.mutateAsync({ file: selectedFile, settings, imageId: selectedImageId });
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+    } catch (error) {
+      clearInterval(progressInterval);
     }
-
-    setSelectedFiles([]);
-    setFileNames([]);
-    setIsUploading(false);
-    toast({
-      title: "All files uploaded",
-      description: "All selected MCR files have been uploaded and queued for processing.",
-    });
   };
 
-  const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      const validFiles: File[] = [];
-      const validFileNames: string[] = [];
-
-      acceptedFiles.forEach(file => {
-        if (!file.name.toLowerCase().endsWith('.mcr')) {
-          toast({
-            title: "Invalid file type",
-            description: `File ${file.name}: Please upload a .mcr file.`,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-          toast({
-            title: "File too large",
-            description: `File ${file.name}: Please upload a file smaller than 10MB.`,
-            variant: "destructive",
-          });
-          return;
-        }
-        validFiles.push(file);
-        validFileNames.push(file.name);
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file && file.name.toLowerCase().endsWith('.mcr')) {
+      setSelectedFile(file);
+    } else {
+      toast({
+        title: "Invalid file type",
+        description: "Only .mcr files are allowed",
+        variant: "destructive",
       });
-
-      setSelectedFiles(prev => [...prev, ...validFiles]);
-      setFileNames(prev => [...prev, ...validFileNames]);
-    },
-    [toast]
-  );
+    }
+  }, [toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'application/octet-stream': ['.mcr'],
+      'application/octet-stream': ['.mcr']
     },
-    multiple: true,
+    maxFiles: 1,
   });
 
-  const handleManualUpload = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.mcr';
-    input.multiple = true; // Allow multiple file selection
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        onDrop(Array.from(files));
-      }
-    };
-    input.click();
-  };
+  const selectedImage = images.find(img => img.id === selectedImageId);
+
+  if (showPathDrawer && selectedImageId && selectedImage) {
+    return (
+      <ImagePathDrawer
+        imageId={selectedImageId}
+        imagePath={`/uploads/images/${selectedImage.filename}`}
+        imageName={selectedImage.originalName}
+        onPathComplete={handlePathComplete}
+        onCancel={() => setShowPathDrawer(false)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Upload Section */}
+      {/* Step 1: Select Image */}
       <Card>
-        <CardContent className="p-6">
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-              isDragActive
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary'
-            }`}
-            data-testid="file-dropzone"
-          >
-            <input {...getInputProps()} />
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-                <Upload className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Upload MCR Files</h3>
-                <p className="text-muted-foreground mb-4">
-                  Drag and drop your .mcr files here, or click to browse
-                </p>
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={(e) => { e.stopPropagation(); handleManualUpload(); }}
-                    disabled={isUploading}
-                    data-testid="select-files-button"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Select Files
-                  </Button>
-                  <Button
-                    onClick={(e) => { e.stopPropagation(); handleUpload(); }}
-                    disabled={isUploading || selectedFiles.length === 0}
-                    data-testid="upload-selected-files-button"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Selected Files ({selectedFiles.length})
-                  </Button>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ImageIcon className="w-5 h-5" />
+            Step 1: Select Image
+          </CardTitle>
+          <CardDescription>
+            Choose an image that represents the workflow for your MCR file
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {images.length === 0 ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                No images available. Please go to the "Image Upload" tab to upload an image first.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-4">
+              <Select value={selectedImageId || ""} onValueChange={handleImageSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an image..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {images.map((image) => (
+                    <SelectItem key={image.id} value={image.id}>
+                      {image.originalName} {image.drawnPath && "✓"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedImageId && (
+                <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <ImageIcon className="w-6 h-6" />
+                    <div>
+                      <p className="font-medium">{selectedImage?.originalName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {pathCompleted ? (
+                          <span className="text-green-600 flex items-center gap-1">
+                            <CheckCircle className="w-4 h-4" />
+                            Path completed
+                          </span>
+                        ) : (
+                          <span className="text-orange-600">Path not drawn yet</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {!pathCompleted && (
+                    <Button onClick={handleDrawPath}>
+                      Draw Path
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  )}
                 </div>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Supported formats: .mcr • Max file size: 10MB
-              </div>
-            </div>
-          </div>
-
-          {fileNames.length > 0 && (
-            <div className="mt-4 p-4 border rounded-lg bg-secondary/20">
-              <p className="text-sm font-medium mb-2">Archivos seleccionados:</p>
-              <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300">
-                {fileNames.map((name, index) => (
-                  <li key={index}>{name}</li>
-                ))}
-              </ul>
-              <Button
-                onClick={() => {
-                  setSelectedFiles([]);
-                  setFileNames([]);
-                }}
-                variant="outline"
-                size="sm"
-                className="mt-3"
-              >
-                Clear Selected Files
-              </Button>
-            </div>
-          )}
-
-          {isUploading && (
-            <div className="mt-6 space-y-3" data-testid="upload-progress">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Uploading file...</span>
-                <span data-testid="upload-percentage">{Math.round(uploadProgress)}%</span>
-              </div>
-              <Progress value={uploadProgress} className="w-full" />
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Humanization Settings */}
+      {/* Step 2: Upload MCR File */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Step 2: Upload MCR File
+          </CardTitle>
+          <CardDescription>
+            Upload your MCR file (mouse commands will be automatically removed)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!pathCompleted ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Please complete Step 1 first by selecting an image and drawing a path.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isDragActive
+                    ? "border-primary bg-primary/5"
+                    : "border-muted-foreground/25 hover:border-primary/50"
+                }`}
+              >
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+                    <Upload className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium mb-1">Upload MCR File</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Drag and drop your .mcr file here, or click to browse
+                    </p>
+                  </div>
+                  {selectedFile && (
+                    <div className="mt-3 p-3 bg-muted rounded-md w-full max-w-sm">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{selectedFile.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(selectedFile.size)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {isUploading && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Uploading...</span>
+                    <span className="text-sm text-muted-foreground">{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Step 3: Humanization Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            Humanization Settings
+            Step 3: Humanization Settings
           </CardTitle>
+          <CardDescription>
+            Configure minimal delays and timing (keyboard commands only)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="delayVariation"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Delay Variation</FormLabel>
-                      <FormControl>
-                        <div className="space-y-2">
-                          <Slider
-                            value={[field.value]}
-                            onValueChange={(value) => field.onChange(value[0])}
-                            min={1}
-                            max={100}
-                            step={1}
-                            className="w-full"
-                            data-testid="delay-variation-slider"
-                          />
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>1%</span>
-                            <span className="font-medium" data-testid="delay-variation-value">
-                              {field.value}%
-                            </span>
-                            <span>100%</span>
-                          </div>
-                        </div>
-                      </FormControl>
-                      <FormDescription>
-                        Add random variations to timing delays
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
+            <div className="space-y-6">
+              <FormField
+                control={form.control}
+                name="timeExtensionFactor"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time Extension Factor: {field.value.toFixed(1)}x</FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={1}
+                        max={5}
+                        step={0.1}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Multiply all delays (1.0 = normal, 2.0 = double time)
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="typingErrors"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Typing Errors</FormLabel>
-                      <FormControl>
-                        <div className="space-y-2">
-                          <Slider
-                            value={[field.value]}
-                            onValueChange={(value) => field.onChange(value[0])}
-                            min={0}
-                            max={10}
-                            step={0.1}
-                            className="w-full"
-                            data-testid="typing-errors-slider"
-                          />
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>0%</span>
-                            <span className="font-medium" data-testid="typing-errors-value">
-                              {field.value.toFixed(1)}%
-                            </span>
-                            <span>10%</span>
-                          </div>
-                        </div>
-                      </FormControl>
-                      <FormDescription>
-                        Simulate occasional typing mistakes
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="minDelay"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Minimum Delay: {field.value}ms</FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Minimum delay between commands
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
 
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="hesitationPauses"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Hesitation Pauses</FormLabel>
-                      <FormControl>
-                        <div className="space-y-2">
-                          <Slider
-                            value={[field.value]}
-                            onValueChange={(value) => field.onChange(value[0])}
-                            min={0}
-                            max={50}
-                            step={1}
-                            className="w-full"
-                            data-testid="hesitation-pauses-slider"
-                          />
-                          <div className="flex justify-between text-sm text-muted-foreground">
-                            <span>0%</span>
-                            <span className="font-medium" data-testid="hesitation-pauses-value">
-                              {field.value}%
-                            </span>
-                            <span>50%</span>
-                          </div>
-                        </div>
-                      </FormControl>
-                      <FormDescription>
-                        Add natural pauses before actions
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={form.control}
+                name="maxDelay"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Maximum Delay: {field.value}ms</FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={10}
+                        max={1000}
+                        step={10}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Maximum delay between commands
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="preserveStructure"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="preserve-structure-checkbox"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Preserve original structure</FormLabel>
-                        <FormDescription>
-                          Maintain the overall timing structure of the original file
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="removeMouseOnUpload"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="remove-mouse-checkbox"
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Remove mouse commands</FormLabel>
-                        <FormDescription>
-                          Strip all mouse-related commands from the file upon upload.
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="delayVariation"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Delay Variation: {field.value}%</FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={1}
+                        max={100}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Randomness in delays (lower = more consistent)
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
             </div>
           </Form>
+
+          <div className="mt-6">
+            <Button
+              onClick={handleUpload}
+              disabled={!selectedFile || !pathCompleted || isUploading}
+              className="w-full"
+              size="lg"
+            >
+              {isUploading ? "Uploading..." : "Upload & Process MCR File"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
-
-      
     </div>
   );
 }

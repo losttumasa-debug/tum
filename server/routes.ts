@@ -87,18 +87,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
+      // OBLIGATORIO: requiredImageId debe estar presente
+      const requiredImageId = req.body.requiredImageId;
+      if (!requiredImageId) {
+        if (req.file) {
+          await fs.unlink(req.file.path).catch(() => {});
+        }
+        return res.status(400).json({ 
+          message: "Image is required. Please upload an image and draw a path first." 
+        });
+      }
+
+      // Verificar que la imagen existe y tiene una ruta dibujada
+      const image = await storage.getImage(requiredImageId);
+      if (!image) {
+        if (req.file) {
+          await fs.unlink(req.file.path).catch(() => {});
+        }
+        return res.status(400).json({ 
+          message: "Associated image not found. Please upload an image first." 
+        });
+      }
+
+      // Verificar que la imagen tiene una ruta dibujada
+      if (!image.drawnPath) {
+        if (req.file) {
+          await fs.unlink(req.file.path).catch(() => {});
+        }
+        return res.status(400).json({ 
+          message: "Please draw a path on the image before uploading MCR file." 
+        });
+      }
+
       const humanizationSettings = req.body.humanizationSettings 
         ? JSON.parse(req.body.humanizationSettings)
         : {};
 
       const validatedSettings = humanizationSettingsSchema.parse(humanizationSettings);
 
-      // If removeMouseOnUpload is true, clean the file immediately
-      if (validatedSettings.removeMouseOnUpload && req.file) {
+      // ALWAYS remove mouse commands from uploaded MCR
+      if (req.file) {
         const filePath = req.file.path;
         const content = await fs.readFile(filePath, 'utf-8');
         let commands = parseMcrContent(content);
         commands = removeMouseCommands(commands);
+        console.log(`Filtered out ${parseMcrContent(content).length - commands.length} mouse commands`);
         const newContent = generateMcrContent(commands);
         await fs.writeFile(filePath, newContent);
       }
@@ -108,6 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filename: req.file.filename,
         size: req.file.size,
         humanizationSettings: validatedSettings,
+        requiredImageId: requiredImageId,
       };
 
       const validatedData = insertMcrFileSchema.parse(fileData);
@@ -393,11 +427,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
         // Default humanization settings for the merged file
         const defaultHumanizationSettings = {
-          delayVariation: 25,
-          typingErrors: 2,
-          hesitationPauses: 15,
+          delayVariation: 10,
+          typingErrors: 1,
+          hesitationPauses: 5,
           preserveStructure: true,
-          removeMouseOnUpload: false,
+          removeMouseOnUpload: true,
+          timeExtensionFactor: 1.0,
+          minDelay: 10,
+          maxDelay: 100,
         };
   
         const mergedCommands = await mergeAndOptimizeMcrFiles(commands1, commands2, defaultHumanizationSettings);
