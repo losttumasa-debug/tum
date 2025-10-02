@@ -65,17 +65,20 @@ export default function ImageUpload() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: images = [] } = useQuery<ImageFile[]>({
+  const { data: images = [], isError, error: queryError } = useQuery<ImageFile[]>({
     queryKey: ['/api/images'],
     queryFn: async () => {
       try {
         const response = await apiRequest('GET', '/api/images');
-        return await response.json();
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
       } catch (error) {
+        console.error('Error fetching images:', error);
         return [];
       }
     },
     refetchInterval: 5000,
+    retry: false,
   });
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -348,7 +351,7 @@ export default function ImageUpload() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {images.length === 0 ? (
+          {!Array.isArray(images) || images.length === 0 ? (
             <div className="text-center py-12">
               <FileImage className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No images uploaded yet</h3>
@@ -358,7 +361,7 @@ export default function ImageUpload() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {images.map((image) => (
+              {images.filter(image => image && image.id).map((image) => (
                 <Card key={image.id} className="overflow-hidden">
                   <CardContent className="p-4">
                     <div className="space-y-3">
