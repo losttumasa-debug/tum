@@ -101,11 +101,13 @@ export default function FileUpload() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (data: { file: File; settings: HumanizationSettings; imageId: string }) => {
+    mutationFn: async (data: { file: File; settings: HumanizationSettings; imageId?: string | null }) => {
       const formData = new FormData();
       formData.append('file', data.file);
       formData.append('humanizationSettings', JSON.stringify(data.settings));
-      formData.append('requiredImageId', data.imageId);
+      if (data.imageId) {
+        formData.append('requiredImageId', data.imageId);
+      }
 
       const response = await apiRequest('POST', '/api/files/upload', formData);
       return response.json();
@@ -165,19 +167,10 @@ export default function FileUpload() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !selectedImageId) {
+    if (!selectedFile) {
       toast({
-        title: "Missing requirements",
-        description: "Please select an image with path and an MCR file.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!pathCompleted) {
-      toast({
-        title: "Path not completed",
-        description: "Please draw a path on the image first.",
+        title: "No file selected",
+        description: "Please select an MCR file to upload.",
         variant: "destructive",
       });
       return;
@@ -197,7 +190,11 @@ export default function FileUpload() {
     }, 200);
 
     try {
-      await uploadMutation.mutateAsync({ file: selectedFile, settings, imageId: selectedImageId });
+      await uploadMutation.mutateAsync({ 
+        file: selectedFile, 
+        settings, 
+        imageId: selectedImageId || null 
+      });
       clearInterval(progressInterval);
       setUploadProgress(100);
     } catch (error) {
