@@ -217,6 +217,33 @@ export function registerAdvancedRoutes(app: Express) {
 
   // ==================== IMAGE ANALYSIS ENDPOINTS ====================
   
+  // Get all images
+  app.get("/api/images", async (req, res) => {
+    try {
+      const images = await storage.getImages();
+      res.json(images);
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to fetch images" 
+      });
+    }
+  });
+
+  // Get specific image
+  app.get("/api/images/:id", async (req, res) => {
+    try {
+      const image = await storage.getImage(req.params.id);
+      if (!image) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+      res.json(image);
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to fetch image" 
+      });
+    }
+  });
+
   // Upload image
   app.post("/api/images/upload", imageUpload.single('image'), async (req, res) => {
     try {
@@ -311,6 +338,33 @@ export function registerAdvancedRoutes(app: Express) {
     } catch (error) {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "MCR generation failed" 
+      });
+    }
+  });
+
+  // Delete image
+  app.delete("/api/images/:id", async (req, res) => {
+    try {
+      const image = await storage.getImage(req.params.id);
+      if (!image) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+
+      // Delete the file from disk
+      const imagePath = path.join(process.cwd(), 'uploads/images', image.filename);
+      try {
+        await fs.unlink(imagePath);
+      } catch (err) {
+        console.error("Failed to delete image file:", err);
+      }
+
+      // Delete from database
+      await storage.deleteImage(req.params.id);
+      
+      res.json({ message: "Image deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to delete image" 
       });
     }
   });

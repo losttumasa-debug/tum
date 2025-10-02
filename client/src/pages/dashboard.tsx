@@ -5,6 +5,7 @@ import FileManagement from "@/components/FileManagement";
 import ProcessingStats from "@/components/ProcessingStats";
 import ProcessingQueueView from "@/components/ProcessingQueueView";
 import DownloadsView from "@/components/DownloadsView";
+import ImageUpload from "@/components/ImageUpload";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +30,8 @@ import {
   Moon,
   Sun,
   User,
-  Keyboard
+  Keyboard,
+  Image
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -49,6 +51,7 @@ export default function Dashboard() {
 
   const sidebarItems = [
     { id: "upload", label: "Upload Files", icon: Upload },
+    { id: "images", label: "Image Upload", icon: Image },
     { id: "management", label: "File Management", icon: Files },
     { id: "queue", label: "Processing Queue", icon: Activity },
     { id: "downloads", label: "Downloads", icon: Download },
@@ -103,12 +106,14 @@ export default function Dashboard() {
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">
                     {activeTab === "upload" && "MCR File Upload"}
+                    {activeTab === "images" && "Image Upload & Analysis"}
                     {activeTab === "management" && "File Management"}
                     {activeTab === "queue" && "Processing Queue"}
                     {activeTab === "downloads" && "Downloads"}
                   </h2>
                   <p className="text-sm text-muted-foreground">
                     {activeTab === "upload" && "Upload and humanize your macro files"}
+                    {activeTab === "images" && "Upload images and generate MCR files with OCR"}
                     {activeTab === "management" && "Manage your uploaded files"}
                     {activeTab === "queue" && "Monitor processing status"}
                     {activeTab === "downloads" && "Download processed files"}
@@ -139,6 +144,10 @@ export default function Dashboard() {
                   <FileUpload />
                   <ProcessingStats />
                 </>
+              )}
+              
+              {activeTab === "images" && (
+                <ImageUpload />
               )}
               
               {activeTab === "management" && (
