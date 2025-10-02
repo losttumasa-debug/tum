@@ -478,6 +478,50 @@ export default function FileUpload() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="typingErrors"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Typing Errors: {field.value}%</FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={0}
+                        max={10}
+                        step={0.5}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Simulate realistic typing mistakes with automatic corrections (0 = no errors, 10 = frequent errors)
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="hesitationPauses"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Hesitation Pauses: {field.value}%</FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={0}
+                        max={50}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Add natural hesitation pauses (simulates thinking or reading)
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
             </div>
           </Form>
 
