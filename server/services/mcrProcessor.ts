@@ -26,7 +26,12 @@
       const content = await fs.readFile(originalPath, 'utf-8');
 
       await storage.updateProcessingStatus(queueItem.id, { currentStep: 'Parsing commands' });
-      const commands = parseMcrContent(content);
+      const parsedCommands = parseMcrContent(content);
+      
+      // ALWAYS remove mouse commands - keyboard only
+      const commands = removeMouseCommands(parsedCommands);
+      
+      console.log(`Filtered ${parsedCommands.length - commands.length} mouse commands from MCR`);
 
       await storage.updateMcrFile(file.id, {
         originalCommands: commands.length,
@@ -296,36 +301,64 @@
   ): Promise<McrCommand[]> {
     const humanized: McrCommand[] = [];
     const totalCommands = commands.length;
-    const excludedKeys = settings.excludedKeys || []; // Get excluded keys
+    const excludedKeys = settings.excludedKeys || [];
+    
+    // New parameters for minimal delays and time extension
+    const timeExtensionFactor = (settings as any).timeExtensionFactor || 1.0;
+    const minDelayMs = (settings as any).minDelay || 10;
+    const maxDelayMs = (settings as any).maxDelay || 100;
+    
+    // Seeded random generator for non-repetitive variations
+    let randomSeed = Date.now();
+    const seededRandom = () => {
+      randomSeed = (randomSeed * 9301 + 49297) % 233280;
+      return randomSeed / 233280;
+    };
 
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
       const progress = (i / totalCommands) * 100;
       onProgress(progress);
 
-      // If the command is a keyboard command and its key is in excludedKeys, skip it
+      // Skip excluded keyboard commands
       if (command.type === 'keyboard' && command.key && excludedKeys.includes(command.key)) {
         continue; 
       }
 
-      // Add hesitation before certain actions
+      // Skip mouse commands (should already be filtered, but double-check)
+      if (command.type === 'mouse') {
+        continue;
+      }
+
+      // Add minimal hesitation before certain actions
       if (shouldAddHesitation(command, settings.hesitationPauses)) {
+        const hesitationDelay = Math.round(minDelayMs + seededRandom() * (maxDelayMs - minDelayMs));
         humanized.push({
           type: 'delay',
           action: 'wait',
-          delay: randomDelay(50, 200)
+          delay: Math.round(hesitationDelay * timeExtensionFactor)
         });
       }
 
-      // Apply variations to delays
+      // Apply TIME EXTENSION and minimal variation to delays
       if (command.type === 'delay' && command.delay) {
+        // Apply time extension first
+        let extendedDelay = command.delay * timeExtensionFactor;
+        
+        // Apply minimal variation (±10% max by default)
         const variation = settings.delayVariation / 100;
-        const minDelay = command.delay * (1 - variation);
-        const maxDelay = command.delay * (1 + variation);
-
+        const minVariation = extendedDelay * (1 - variation);
+        const maxVariation = extendedDelay * (1 + variation);
+        
+        // Use seeded random for non-repetitive values
+        let finalDelay = minVariation + seededRandom() * (maxVariation - minVariation);
+        
+        // Clamp to min/max bounds
+        finalDelay = Math.max(minDelayMs, Math.min(maxDelayMs, finalDelay));
+        
         humanized.push({
           ...command,
-          delay: Math.round(randomInRange(minDelay, maxDelay))
+          delay: Math.round(finalDelay)
         });
       } else {
         humanized.push({ ...command });

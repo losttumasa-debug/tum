@@ -115,12 +115,16 @@ export const insertImageSchema = createInsertSchema(images).pick({
 });
 
 export const humanizationSettingsSchema = z.object({
-  delayVariation: z.number().min(1).max(100).default(25),
-  typingErrors: z.number().min(0).max(10).default(2),
-  hesitationPauses: z.number().min(0).max(50).default(15),
+  delayVariation: z.number().min(1).max(100).default(10), // Reducido a mínimo
+  typingErrors: z.number().min(0).max(10).default(1), // Reducido
+  hesitationPauses: z.number().min(0).max(50).default(5), // Reducido
   preserveStructure: z.boolean().default(true),
   excludedKeys: z.array(z.string()).optional(),
-  removeMouseOnUpload: z.boolean().default(false),
+  removeMouseOnUpload: z.boolean().default(true), // Ahora por defecto TRUE
+  timeExtensionFactor: z.number().min(1).max(5).default(1), // 1.0 = normal, 2.0 = doble
+  minDelay: z.number().min(0).max(100).default(10), // Delay mínimo en ms
+  maxDelay: z.number().min(10).max(1000).default(100), // Delay máximo en ms
+  requiredImageId: z.string().optional(), // ID de imagen obligatoria
 });
 
 export const insertPatternSchema = createInsertSchema(patterns).pick({
