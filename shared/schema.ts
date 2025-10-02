@@ -26,6 +26,7 @@ export const mcrFiles = pgTable("mcr_files", {
   errorMessage: text("error_message"),
   processedFilePath: text("processed_file_path"),
   sourceFileIds: varchar("source_file_ids").array(),
+  requiredImageId: varchar("required_image_id"), // OBLIGATORIO: ID de la imagen asociada
 });
 
 export const images = pgTable("images", {
@@ -36,6 +37,8 @@ export const images = pgTable("images", {
   size: integer("size").notNull(),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   associatedMcrFileId: varchar("associated_mcr_file_id").references(() => mcrFiles.id),
+  drawnPath: jsonb("drawn_path"), // Polyline dibujada por el usuario: [{x: number, y: number}]
+  pathMetadata: jsonb("path_metadata"), // Metadata de la ruta: longitud, tiempo, etc.
 });
 
 export const processingQueue = pgTable("processing_queue", {
@@ -112,6 +115,8 @@ export const insertImageSchema = createInsertSchema(images).pick({
   filename: true,
   size: true,
   associatedMcrFileId: true,
+  drawnPath: true,
+  pathMetadata: true,
 });
 
 export const humanizationSettingsSchema = z.object({
