@@ -8,9 +8,10 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-export function formatTimeAgo(date: Date): string {
+export function formatTimeAgo(date: Date | string): string {
   const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const diffInMs = now.getTime() - dateObj.getTime();
   const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
   const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
   const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
