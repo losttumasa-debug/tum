@@ -7,6 +7,8 @@ import fs from "fs/promises";
 import { storage } from "./storage";
 import { insertMcrFileSchema, humanizationSettingsSchema } from "@shared/schema";
 import { processMcrFile, parseMcrContent, calculateMcrDuration, lengthenMcr, generateMcrContent, removeMouseCommands, removeZeroDelays, findCommonSequences, mergeAndOptimizeMcrFiles } from "./services/mcrProcessor";
+import { registerAdvancedRoutes } from "./routes-advanced";
+import { queueService } from "./services/queueService";
 
 const upload = multer({
   dest: 'uploads/',
@@ -46,6 +48,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   }
+
+  // Connect queue service to WebSocket broadcast
+  queueService.setBroadcastCallback(broadcastUpdate);
 
   // Get all MCR files
   app.get("/api/files", async (req, res) => {
@@ -523,18 +528,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", async (req, res) => {
     try {
       const files = await storage.getMcrFiles();
+      const patterns = await storage.getPatterns();
+      const profiles = await storage.getProfiles();
+      const queueStatus = await queueService.getQueueStatus();
+      
       const stats = {
         totalFiles: files.length,
         completed: files.filter(f => f.status === 'completed').length,
         processing: files.filter(f => f.status === 'processing').length,
         failed: files.filter(f => f.status === 'failed').length,
-        pending: files.filter(f => f.status === 'pending').length
+        pending: files.filter(f => f.status === 'pending').length,
+        totalPatterns: patterns.length,
+        totalProfiles: profiles.length,
+        queueStatus
       };
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch statistics" });
     }
   });
+
+  // Register advanced routes (patterns, profiles, images, batch processing)
+  registerAdvancedRoutes(app);
 
   return httpServer;
 }

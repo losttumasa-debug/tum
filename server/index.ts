@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { queueService } from "./services/queueService";
+import { profileService } from "./services/profileService";
 
 const app = express();
 app.use(express.json());
@@ -38,6 +40,19 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    log('Initializing services...');
+    
+    await profileService.createDefaultProfiles();
+    log('✓ Default humanization profiles created');
+    
+    queueService.startWorkers();
+    log('✓ Background job workers started');
+    
+  } catch (error) {
+    log(`Warning: Service initialization error: ${error}`);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -67,5 +82,13 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
   }, () => {
     log(`serving on port ${port}`);
+  });
+
+  process.on('SIGTERM', async () => {
+    log('SIGTERM signal received: closing HTTP server');
+    await queueService.close();
+    server.close(() => {
+      log('HTTP server closed');
+    });
   });
 })();

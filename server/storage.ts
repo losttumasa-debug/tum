@@ -2,14 +2,25 @@ import {
   users, 
   mcrFiles, 
   processingQueue,
-  images, 
+  images,
+  patterns,
+  humanizationProfiles,
+  imageAnalysis,
+  patternUsage,
   type User, 
   type InsertUser, 
   type McrFile, 
   type InsertMcrFile,
   type ProcessingQueue,
   type Image, 
-  type InsertImage 
+  type InsertImage,
+  type Pattern,
+  type InsertPattern,
+  type HumanizationProfile,
+  type InsertHumanizationProfile,
+  type ImageAnalysis,
+  type InsertImageAnalysis,
+  type PatternUsage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -39,6 +50,26 @@ export interface IStorage {
   getImages(userId?: string): Promise<Image[]>;
   updateImage(id: string, updates: Partial<Image>): Promise<Image | undefined>;
   deleteImage(id: string): Promise<boolean>;
+
+  // Pattern operations
+  createPattern(pattern: InsertPattern): Promise<Pattern>;
+  getPattern(id: string): Promise<Pattern | undefined>;
+  getPatterns(): Promise<Pattern[]>;
+  updatePattern(id: string, updates: Partial<Pattern>): Promise<Pattern | undefined>;
+  deletePattern(id: string): Promise<boolean>;
+
+  // Profile operations
+  createProfile(profile: InsertHumanizationProfile): Promise<HumanizationProfile>;
+  getProfile(id: string): Promise<HumanizationProfile | undefined>;
+  getProfiles(): Promise<HumanizationProfile[]>;
+  updateProfile(id: string, updates: Partial<HumanizationProfile>): Promise<HumanizationProfile | undefined>;
+  deleteProfile(id: string): Promise<boolean>;
+
+  // Image Analysis operations
+  createImageAnalysis(analysis: InsertImageAnalysis): Promise<ImageAnalysis>;
+  getImageAnalysis(id: string): Promise<ImageAnalysis | undefined>;
+  getImageAnalysisByImageId(imageId: string): Promise<ImageAnalysis | undefined>;
+  updateImageAnalysis(id: string, updates: Partial<ImageAnalysis>): Promise<ImageAnalysis | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -161,6 +192,86 @@ export class DatabaseStorage implements IStorage {
   async deleteImage(id: string): Promise<boolean> {
     const result = await db.delete(images).where(eq(images.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async createPattern(pattern: InsertPattern): Promise<Pattern> {
+    const [created] = await db.insert(patterns).values(pattern).returning();
+    return created;
+  }
+
+  async getPattern(id: string): Promise<Pattern | undefined> {
+    const [pattern] = await db.select().from(patterns).where(eq(patterns.id, id));
+    return pattern || undefined;
+  }
+
+  async getPatterns(): Promise<Pattern[]> {
+    return await db.select().from(patterns).orderBy(desc(patterns.createdAt));
+  }
+
+  async updatePattern(id: string, updates: Partial<Pattern>): Promise<Pattern | undefined> {
+    const [updated] = await db
+      .update(patterns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(patterns.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deletePattern(id: string): Promise<boolean> {
+    const result = await db.delete(patterns).where(eq(patterns.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async createProfile(profile: InsertHumanizationProfile): Promise<HumanizationProfile> {
+    const [created] = await db.insert(humanizationProfiles).values(profile).returning();
+    return created;
+  }
+
+  async getProfile(id: string): Promise<HumanizationProfile | undefined> {
+    const [profile] = await db.select().from(humanizationProfiles).where(eq(humanizationProfiles.id, id));
+    return profile || undefined;
+  }
+
+  async getProfiles(): Promise<HumanizationProfile[]> {
+    return await db.select().from(humanizationProfiles).orderBy(desc(humanizationProfiles.createdAt));
+  }
+
+  async updateProfile(id: string, updates: Partial<HumanizationProfile>): Promise<HumanizationProfile | undefined> {
+    const [updated] = await db
+      .update(humanizationProfiles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(humanizationProfiles.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProfile(id: string): Promise<boolean> {
+    const result = await db.delete(humanizationProfiles).where(eq(humanizationProfiles.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async createImageAnalysis(analysis: InsertImageAnalysis): Promise<ImageAnalysis> {
+    const [created] = await db.insert(imageAnalysis).values(analysis).returning();
+    return created;
+  }
+
+  async getImageAnalysis(id: string): Promise<ImageAnalysis | undefined> {
+    const [analysis] = await db.select().from(imageAnalysis).where(eq(imageAnalysis.id, id));
+    return analysis || undefined;
+  }
+
+  async getImageAnalysisByImageId(imageId: string): Promise<ImageAnalysis | undefined> {
+    const [analysis] = await db.select().from(imageAnalysis).where(eq(imageAnalysis.imageId, imageId));
+    return analysis || undefined;
+  }
+
+  async updateImageAnalysis(id: string, updates: Partial<ImageAnalysis>): Promise<ImageAnalysis | undefined> {
+    const [updated] = await db
+      .update(imageAnalysis)
+      .set(updates)
+      .where(eq(imageAnalysis.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

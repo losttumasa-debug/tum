@@ -84,6 +84,100 @@ The application is configured for Replit Autoscale deployment:
 - Run command: `node dist/index.js`
 - Port: 5000 (configured in server/index.ts)
 
+## Advanced Features (October 2025)
+
+### 🚀 **Sistema de Colas con BullMQ**
+- Procesamiento paralelo de múltiples archivos MCR
+- 3 workers concurrentes para máximo rendimiento
+- Sistema de reintentos automáticos en caso de errores
+- Monitoreo de estado de cola en tiempo real
+
+### 🧠 **Minería Inteligente de Patrones**
+- Análisis de N archivos simultáneamente (3, 5, 10+)
+- Detección automática de secuencias comunes
+- Almacenamiento de patrones con metadata y confianza
+- Sistema de scoring para seleccionar los mejores patrones
+
+### 📊 **Análisis de Transiciones (Markov)**
+- Cálculo de probabilidades de transición entre comandos
+- Predicción del próximo comando más probable
+- Identificación de "hotspots" (secuencias más comunes)
+
+### 🎭 **Perfiles de Humanización**
+- 5 perfiles predefinidos: Novice, Average, Expert, Cautious, Power User
+- Cada perfil con características únicas de velocidad y precisión
+- Sistema configurable para crear perfiles personalizados
+- Aplicación automática de perfiles en batch processing
+
+### 🖼️ **Análisis de Imágenes con OCR**
+- Extracción de texto con Tesseract.js
+- Detección automática de elementos UI (botones, campos, menús)
+- Generación inteligente de MCR desde screenshots
+- Integración con patrones aprendidos para mejor calidad
+
+### ⚡ **Sistema de Caché con Redis**
+- Caché de comandos parseados por hash de archivo
+- Caché de análisis de patrones
+- Caché de resultados de análisis de imágenes
+- Invalidación inteligente de caché
+
+### 📦 **Batch Processing**
+- Procesamiento masivo de archivos con un solo click
+- Aprendizaje automático de patrones durante el proceso
+- Aplicación de perfiles a múltiples archivos
+- Monitoreo de progreso en tiempo real
+
+### 📈 **Métricas y Estadísticas**
+- Estadísticas completas del sistema
+- Conteo de patrones y perfiles
+- Estado de la cola de procesamiento
+- Métricas de éxito por patrón
+
+## New API Endpoints
+
+### Patterns
+- `GET /api/patterns` - Obtener todos los patrones
+- `POST /api/patterns/mine` - Minar patrones de múltiples archivos
+- `POST /api/patterns/by-files` - Obtener patrones por IDs de archivo
+- `POST /api/patterns/transitions` - Analizar transiciones Markov
+- `DELETE /api/patterns/:id` - Eliminar patrón
+
+### Profiles
+- `GET /api/profiles` - Listar perfiles de humanización
+- `GET /api/profiles/default` - Obtener perfil por defecto
+- `GET /api/profiles/:id` - Obtener perfil específico
+- `POST /api/profiles` - Crear nuevo perfil
+- `PUT /api/profiles/:id` - Actualizar perfil
+- `DELETE /api/profiles/:id` - Eliminar perfil
+
+### Images
+- `POST /api/images/upload` - Subir imagen
+- `POST /api/images/:id/analyze` - Analizar imagen con OCR
+- `GET /api/images/:id/analysis` - Obtener resultados del análisis
+- `POST /api/images/:id/generate-mcr` - Generar MCR desde imagen
+
+### Batch Processing
+- `POST /api/batch/process` - Procesar múltiples archivos
+- `GET /api/queue/status` - Estado de la cola
+- `POST /api/queue/pause` - Pausar cola
+- `POST /api/queue/resume` - Reanudar cola
+- `POST /api/queue/clear` - Limpiar trabajos completados
+
+## Technology Stack
+
+### Backend Services
+- **BullMQ**: Sistema de colas de trabajos
+- **Redis**: Caché y almacenamiento de sesiones
+- **Tesseract.js**: OCR para análisis de imágenes
+- **Sharp**: Procesamiento y optimización de imágenes
+- **ml-kmeans**: Clustering para análisis de patrones
+
+### Database Extensions
+- Tabla `patterns`: Patrones aprendidos con metadata
+- Tabla `humanization_profiles`: Perfiles configurables
+- Tabla `image_analysis`: Resultados de análisis OCR/CV
+- Tabla `pattern_usage`: Métricas de uso de patrones
+
 ## Recent Setup Changes (October 2025)
 
 - Created vite.config.ts with proper ES module support
@@ -92,6 +186,11 @@ The application is configured for Replit Autoscale deployment:
 - Configured Tailwind CSS with standard v3.x approach
 - Fixed Vite config to work with Replit environment
 - Configured deployment settings for production
+- **NEW**: Implementado sistema completo de AI/ML para humanización inteligente
+- **NEW**: Sistema de colas BullMQ con 3 workers concurrentes
+- **NEW**: Caché Redis para optimización de rendimiento
+- **NEW**: 5 servicios nuevos: cache, queue, pattern, image analysis, profile
+- **NEW**: 20+ nuevos endpoints API para funcionalidades avanzadas
 
 ## User Preferences
 
